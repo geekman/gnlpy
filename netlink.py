@@ -195,6 +195,41 @@ class AttrListPacker(object):
     pass
 
 
+def create_list_type(items_class):
+    class ListType(object):
+        def __init__(self):
+            self.items = []
+
+        def append(self, item):
+            self.items.append(item)
+
+        def __getitem__(self, key):
+            return self.items.__getitem__(key)
+
+        def __len__(self):
+            return self.items.__len__()
+
+        def __repr__(self):
+            return self.items.__repr__()
+
+        @staticmethod
+        def unpack(data):
+            l = ListType()
+            i = 1
+            while len(data) > 0:
+                alen, idx = struct.unpack(str('=HH'), data[:4])
+                alen = alen & 0x7fff
+                assert i == idx
+                v = items_class.unpack(data[4:alen])
+                l.append(v)
+                i += 1
+                data = data[((alen + 3) & (~3)):]
+
+            return l
+
+    return ListType
+
+
 def create_attr_list_type(class_name, *fields):
     """Create a new attr_list_type which is a class offering get and set
     methods which is capable of serializing and deserializing itself from
@@ -424,8 +459,8 @@ CtrlAttrList = create_attr_list_type(
     ('VERSION', U32Type),
     ('HDRSIZE', U32Type),
     ('MAXATTR', U32Type),
-    ('OPS', IgnoreType),  # TODO: CtrlOpsAttrList
-    ('MCAST_GROUPS', CtrlMcastGroupAttrList),
+    ('OPS', create_list_type(CtrlOpsAttrList)),
+    ('MCAST_GROUPS', create_list_type(CtrlMcastGroupAttrList)),
 )
 
 CtrlMessage = create_genl_message_type(
